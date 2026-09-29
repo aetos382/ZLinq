@@ -429,7 +429,7 @@ partial class ValueEnumerableExtensions
     {
         var whereEnumerator = source.Enumerator; // no needs dispose(using)
         var predicate = whereEnumerator.Predicate;
-        var sourceArray = CollectionsMarshal.AsSpan(whereEnumerator.GetSource());
+        var sourceArray = ListMarshal.GetElements(whereEnumerator.GetSource());
 
 #if NETSTANDARD2_0
         Span<TSource> initialBufferSpan = default;
@@ -443,8 +443,9 @@ partial class ValueEnumerableExtensions
         var arrayBuilder = new SegmentedArrayProvider<TSource>(initialBufferSpan);
         var span = arrayBuilder.GetSpan();
         var i = 0;
-        foreach (var item in sourceArray)
+        for (var j = 0; (uint)j < (uint)sourceArray.Length; j++)
         {
+            var item = sourceArray[j];
             if (predicate(item))
             {
                 if (i == span.Length)
@@ -476,7 +477,7 @@ partial class ValueEnumerableExtensions
         var whereEnumerator = source.Enumerator; // no needs dispose(using)
         var predicate = whereEnumerator.Predicate;
         var selector = whereEnumerator.Selector;
-        var sourceArray = CollectionsMarshal.AsSpan(whereEnumerator.GetSource());
+        var sourceArray = ListMarshal.GetElements(whereEnumerator.GetSource());
 
 #if NETSTANDARD2_0
         Span<TResult> initialBufferSpan = default;
@@ -491,8 +492,9 @@ partial class ValueEnumerableExtensions
         var span = arrayBuilder.GetSpan();
         var i = 0;
 
-        foreach (var item in sourceArray)
+        for (var j = 0; (uint)j < (uint)sourceArray.Length; j++)
         {
+            var item = sourceArray[j];
             if (predicate(item))
             {
                 if (i == span.Length)

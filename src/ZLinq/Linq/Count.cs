@@ -87,7 +87,7 @@ namespace ZLinq
             var list = source.Enumerator.GetSource();
             var predicate = source.Enumerator.Predicate;
 
-            var span = CollectionsMarshal.AsSpan(list);
+            var span = ListMarshal.GetElements(list);
             var count = 0;
             for (int i = 0; (uint)i < (uint)span.Length; i++)
             {
@@ -183,7 +183,7 @@ namespace ZLinq
             var list = source.Enumerator.GetSource();
             var count = 0;
 
-            var span = CollectionsMarshal.AsSpan(list);
+            var span = ListMarshal.GetElements(list);
             for (int i = 0; (uint)i < (uint)span.Length; i++)
             {
                 if (predicate(span[i]))

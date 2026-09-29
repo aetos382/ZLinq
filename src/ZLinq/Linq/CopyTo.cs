@@ -53,28 +53,18 @@ partial class ValueEnumerableExtensions
 
         if (enumerator.TryGetNonEnumeratedCount(out var count))
         {
-#if NET8_0_OR_GREATER
-            CollectionsMarshal.SetCount(list, count); // expand internal T[] buffer
-#else
-            if (list.Capacity < count)
+            using var filler = new ListFiller<TSource>(list, count); // expand internal T[] buffer
+            var span = filler.Span;
+            if (!enumerator.TryCopyTo(span, 0))
             {
-                list.Capacity = count; // Grow only buffer is smaller.
+                var i = 0;
+                while (enumerator.TryGetNext(out var current))
+                {
+                    span[i] = current;
+                    i++;
+                }
             }
-            CollectionsMarshal.UnsafeSetCount(list, count); // only set count
-#endif
-
-            var span = CollectionsMarshal.AsSpan(list);
-            if (enumerator.TryCopyTo(span, 0))
-            {
-                return;
-            }
-
-            var i = 0;
-            while (enumerator.TryGetNext(out var current))
-            {
-                span[i] = current;
-                i++;
-            }
+            filler.Commit();
         }
         else
         {

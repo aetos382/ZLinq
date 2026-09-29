@@ -279,12 +279,14 @@ partial class ValueEnumerableExtensions
     {
         var list = source.Enumerator.GetSource();
 
+#if NET8_0_OR_GREATER
         if (typeof(TSource) == typeof(string))
         {
             return JoinToString(CollectionsMarshal.AsSpan(Unsafe.As<List<TSource>, List<string>>(ref list)), separator);
         }
+#endif
 
-        var span = CollectionsMarshal.AsSpan(list);
+        var span = ListMarshal.GetElements(list);
 
         if (span.Length == 0) return "";
         if (span.Length == 1) return span[0]!.ToString() ?? "";
@@ -548,7 +550,7 @@ partial class ValueEnumerableExtensions
         var list = source.Enumerator.source;
         var selector = source.Enumerator.selector;
 
-        var span = CollectionsMarshal.AsSpan(list);
+        var span = ListMarshal.GetElements(list);
 
         if (span.Length == 0) return "";
         if (span.Length == 1) return selector(span[0])?.ToString() ?? "";
@@ -605,7 +607,7 @@ partial class ValueEnumerableExtensions
         var list = source.Enumerator.GetSource();
         var predicate = source.Enumerator.Predicate;
 
-        var span = CollectionsMarshal.AsSpan(list);
+        var span = ListMarshal.GetElements(list);
 
         if (span.Length == 0) return "";
 
@@ -679,7 +681,7 @@ partial class ValueEnumerableExtensions
         var predicate = source.Enumerator.Predicate;
         var selector = source.Enumerator.Selector;
 
-        var span = CollectionsMarshal.AsSpan(list);
+        var span = ListMarshal.GetElements(list);
 
         if (span.Length == 0) return "";
 
