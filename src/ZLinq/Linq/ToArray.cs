@@ -17,6 +17,13 @@ partial class ValueEnumerableExtensions
                 return Array.Empty<TSource>();
             }
 
+#if !NET8_0_OR_GREATER
+            if (ListMarshal.TryGetListSource<TEnumerator, TSource>(in enumerator, out var sourceList))
+            {
+                return sourceList.ToArray();
+            }
+#endif
+
             var array = GC.AllocateUninitializedArray<TSource>(count);
 
             if (enumerator.TryCopyTo(array.AsSpan(), 0))

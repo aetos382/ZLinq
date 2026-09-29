@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 
 namespace ZLinq.Internal;
 
@@ -50,6 +51,43 @@ internal static class ListMarshal
         return false;
 #endif
     }
+
+#if !NET8_0_OR_GREATER
+
+    // netstandard cannot copy the elements of List<T> into Span<T> in bulk,
+    // so ToArray/ToList/CopyTo detect List<T> and array sources and use the bulk copy of the public API instead
+    // (List<T>.ToArray, List<T>(IEnumerable<T>), List<T>.AddRange).
+    // TEnumerator is a value type, so the JIT evaluates the typeof comparison as a constant and removes the unused branch.
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryGetListSource<TEnumerator, T>(in TEnumerator enumerator, [NotNullWhen(true)] out List<T>? list)
+        where TEnumerator : struct, IValueEnumerator<T>
+    {
+        if (typeof(TEnumerator) == typeof(FromList<T>))
+        {
+            list = Unsafe.As<TEnumerator, FromList<T>>(ref Unsafe.AsRef(in enumerator)).GetSource();
+            return true;
+        }
+
+        list = null;
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryGetArraySource<TEnumerator, T>(in TEnumerator enumerator, [NotNullWhen(true)] out T[]? array)
+        where TEnumerator : struct, IValueEnumerator<T>
+    {
+        if (typeof(TEnumerator) == typeof(FromArray<T>))
+        {
+            array = Unsafe.As<TEnumerator, FromArray<T>>(ref Unsafe.AsRef(in enumerator)).GetSource();
+            return true;
+        }
+
+        array = null;
+        return false;
+    }
+
+#endif
 }
 
 #if !NET8_0_OR_GREATER
@@ -107,34 +145,29 @@ internal ref struct ListFiller<T>
 #else
 
     readonly List<T> list;
-    readonly int count;
-    T[] buffer;
+    FillCollection<T>? buffer;
 
     public ListFiller(List<T> list, int count)
     {
         this.list = list;
-        this.count = count;
-        buffer = count == 0 ? [] : ArrayPool<T>.Shared.Rent(count);
+        buffer = FillCollection<T>.Rent(count);
     }
 
     public readonly Span<T> Span
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => buffer.AsSpan(0, count);
+        get => buffer!.Span;
     }
 
     public readonly void Commit()
     {
-        ArrayPrefixCollection<T>.AddRange(list, buffer, count);
+        list.AddRange(buffer!);
     }
 
     public void Dispose()
     {
-        if (buffer.Length != 0)
-        {
-            ArrayPool<T>.Shared.Return(buffer, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
-        }
-        buffer = [];
+        buffer?.Return();
+        buffer = null;
     }
 
 #endif
@@ -142,35 +175,71 @@ internal ref struct ListFiller<T>
 
 #if !NET8_0_OR_GREATER
 
-// Read-only ICollection<T> over the first `count` elements of an array, passed to List<T>.AddRange.
+// Read-only ICollection<T> over a temporary buffer, filled through Span and then passed to List<T>.AddRange.
 // AddRange copies an ICollection<T> through CopyTo in the known implementations, which is a single Array.Copy here.
 // Even if an implementation enumerates it instead, the result is still correct; only the performance differs.
-internal sealed class ArrayPrefixCollection<T> : ICollection<T>
+internal sealed class FillCollection<T> : ICollection<T>
 {
-    [ThreadStatic]
-    static ArrayPrefixCollection<T>? cache;
+    // Buffers up to this length are kept by the cached instance, so that small fills need no ArrayPool round trip.
+    // Larger buffers are rented from ArrayPool.
+    const int MaxRetainedLength = 256;
 
+    [ThreadStatic]
+    static FillCollection<T>? cache;
+
+    T[] retained = [];
     T[] array = [];
     int count;
 
-    public static void AddRange(List<T> list, T[] array, int count)
+    public static FillCollection<T> Rent(int count)
     {
-        // Take the cached instance out while in use, so that a nested call never shares it.
-        var collection = cache ?? new ArrayPrefixCollection<T>();
+        // Take the cached instance out while in use, so that a nested fill (e.g. ToList in a selector) never shares it.
+        var collection = cache ?? new FillCollection<T>();
         cache = null;
 
-        collection.array = array;
+        if (count <= MaxRetainedLength)
+        {
+            if (collection.retained.Length < count)
+            {
+                var length = Math.Max(16, collection.retained.Length * 2);
+                while (length < count)
+                {
+                    length *= 2;
+                }
+                collection.retained = new T[length];
+            }
+            collection.array = collection.retained;
+        }
+        else
+        {
+            collection.array = ArrayPool<T>.Shared.Rent(count);
+        }
+
         collection.count = count;
-        try
+        return collection;
+    }
+
+    public Span<T> Span
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => array.AsSpan(0, count);
+    }
+
+    public void Return()
+    {
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
-            list.AddRange(collection);
+            Array.Clear(array, 0, count);
         }
-        finally
+
+        if (!ReferenceEquals(array, retained))
         {
-            collection.array = [];
-            collection.count = 0;
-            cache = collection;
+            ArrayPool<T>.Shared.Return(array);
         }
+
+        array = [];
+        count = 0;
+        cache = this;
     }
 
     public int Count => count;

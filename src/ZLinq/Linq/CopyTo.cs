@@ -53,6 +53,20 @@ partial class ValueEnumerableExtensions
 
         if (enumerator.TryGetNonEnumeratedCount(out var count))
         {
+#if !NET8_0_OR_GREATER
+            if (ListMarshal.TryGetListSource<TEnumerator, TSource>(in enumerator, out var sourceList))
+            {
+                list.AddRange(sourceList);
+                return;
+            }
+
+            if (ListMarshal.TryGetArraySource<TEnumerator, TSource>(in enumerator, out var sourceArray))
+            {
+                list.AddRange(sourceArray);
+                return;
+            }
+#endif
+
             using var filler = new ListFiller<TSource>(list, count); // expand internal T[] buffer
             var span = filler.Span;
             if (!enumerator.TryCopyTo(span, 0))

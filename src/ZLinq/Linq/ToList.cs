@@ -12,6 +12,18 @@
 
             if (enumerator.TryGetNonEnumeratedCount(out var count))
             {
+#if !NET8_0_OR_GREATER
+                if (ListMarshal.TryGetListSource<TEnumerator, TSource>(in enumerator, out var sourceList))
+                {
+                    return new List<TSource>(sourceList);
+                }
+
+                if (ListMarshal.TryGetArraySource<TEnumerator, TSource>(in enumerator, out var sourceArray))
+                {
+                    return new List<TSource>(sourceArray);
+                }
+#endif
+
                 var list = new List<TSource>(count); // list with capacity set internal buffer as source size
                 using var filler = new ListFiller<TSource>(list, count);
                 var span = filler.Span;
