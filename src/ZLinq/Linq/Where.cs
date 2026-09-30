@@ -334,10 +334,10 @@ namespace ZLinq.Linq
 
         public bool TryGetNext(out TSource current)
         {
-            var span = ListMarshal.GetElements(source);
-            while ((uint)index < (uint)span.Length)
+            var elements = ListMarshal.GetElements(source);
+            while ((uint)index < (uint)elements.Length)
             {
-                var value = span[index];
+                var value = elements[index];
                 index++;
                 if (predicate(value))
                 {
@@ -391,10 +391,10 @@ namespace ZLinq.Linq
 
         public bool TryGetNext(out TResult current)
         {
-            var span = ListMarshal.GetElements(source);
-            while ((uint)index < (uint)span.Length)
+            var elements = ListMarshal.GetElements(source);
+            while ((uint)index < (uint)elements.Length)
             {
-                var value = span[index];
+                var value = elements[index];
                 index++;
                 if (predicate(value))
                 {

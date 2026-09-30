@@ -24,9 +24,10 @@
                 }
 #endif
 
-                var list = new List<TSource>(count); // list with capacity set internal buffer as source size
+                var list = new List<TSource>(count);
                 using var filler = new ListFiller<TSource>(list, count);
                 var span = filler.Span;
+                var written = count;
                 if (!enumerator.TryCopyTo(span, 0))
                 {
                     var i = 0;
@@ -35,8 +36,9 @@
                         span[i] = current;
                         i++;
                     }
+                    written = i;
                 }
-                filler.Commit();
+                filler.Commit(written);
                 return list;
             }
             else
@@ -73,7 +75,7 @@
                 var list = new List<TSource>(count);
                 using var filler = new ListFiller<TSource>(list, count);
                 arrayBuilder.CopyToAndClear(filler.Span);
-                filler.Commit();
+                filler.Commit(count);
                 return list;
             }
         }
@@ -101,7 +103,7 @@
                     span[i] = selector(sourceSpan[i]);
                 }
 
-                filler.Commit();
+                filler.Commit(sourceSpan.Length);
                 return list;
             }
             else
@@ -137,7 +139,7 @@
                 var list = new List<TResult>(count);
                 using var filler = new ListFiller<TResult>(list, count);
                 arrayBuilder.CopyToAndClear(filler.Span);
-                filler.Commit();
+                filler.Commit(count);
                 return list;
             }
         }
@@ -158,7 +160,7 @@
                 value++;
             }
 
-            filler.Commit();
+            filler.Commit(count);
             return list;
         }
 
@@ -176,7 +178,7 @@
                 span[i] = selector(sourceArray[i]);
             }
 
-            filler.Commit();
+            filler.Commit(sourceArray.Length);
             return list;
         }
 
@@ -191,17 +193,18 @@
             using var filler = new ListFiller<TResult>(list, count);
             var span = filler.Span;
 
+            var written = 0;
             if (ListMarshal.UseChunks(sourceList))
             {
-                var offset = 0;
+                // Stops early if the selector shrinks the list; Commit fills the rest with default.
                 foreach (var chunk in new ListChunks<TSource>(sourceList))
                 {
-                    var destination = span.Slice(offset, chunk.Length);
+                    var destination = span.Slice(written, chunk.Length);
                     for (int i = 0; (uint)i < (uint)chunk.Length; i++)
                     {
                         destination[i] = selector(chunk[i]);
                     }
-                    offset += chunk.Length;
+                    written += chunk.Length;
                 }
             }
             else
@@ -211,9 +214,10 @@
                 {
                     span[i] = selector(elements[i]);
                 }
+                written = elements.Length;
             }
 
-            filler.Commit();
+            filler.Commit(written);
             return list;
         }
     }

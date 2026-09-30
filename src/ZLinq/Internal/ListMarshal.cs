@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 
 namespace ZLinq.Internal;
@@ -60,7 +61,8 @@ internal static class ListMarshal
 #else
         if (EnumeratorHelper.TryGetSliceRange(list.Count, offset, destination.Length, out var start, out var count))
         {
-            // First/Last/ElementAt copy a single element, which must not rent a buffer.
+            // Small ranges (including the single element copies of First/Last/ElementAt) are read through the indexer,
+            // which is cheaper than renting a buffer (see ChunkedReadThreshold).
             if (count <= ChunkedReadThreshold)
             {
                 for (var i = 0; i < count; i++)
@@ -84,10 +86,11 @@ internal static class ListMarshal
 
 #if !NET8_0_OR_GREATER
 
-    // netstandard cannot copy the elements of List<T> into Span<T> in bulk,
-    // so ToArray/ToList/CopyTo detect List<T> and array sources and use the bulk copy of the public API instead
-    // (List<T>.ToArray, List<T>(IEnumerable<T>), List<T>.AddRange).
-    // TEnumerator is a value type, so the JIT evaluates the typeof comparison as a constant and removes the unused branch.
+    // netstandard can neither read the elements of List<T> into Span<T> nor write Span<T> into List<T> in bulk,
+    // so ToArray detects List<T> sources, and ToList/CopyTo detect List<T> and array sources,
+    // and they use the bulk copies of the public API instead (List<T>.ToArray, List<T>(IEnumerable<T>), List<T>.AddRange).
+    // TEnumerator is a value type, so the compiler (JIT or IL2CPP) evaluates the typeof comparison as a constant
+    // and removes the unused branch.
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryGetListSource<TEnumerator, T>(in TEnumerator enumerator, [NotNullWhen(true)] out List<T>? list)
@@ -124,12 +127,16 @@ internal static class ListMarshal
 
 // Exposes the same members as ReadOnlySpan<T> that the List<T> specialized operators use (Length and indexer),
 // so the operators can be written once for both ReadOnlySpan<T> (.NET 8 or later) and this type (netstandard).
+// Like a span over the backing array, Length is fixed when this is created, so a loop bounded by Length terminates
+// even if the loop body adds elements to the list. If the list shrinks, the indexer throws instead of reading stale elements.
 internal readonly struct ListElements<T>(List<T> list)
 {
+    readonly int length = list.Count;
+
     public int Length
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => list.Count;
+        get => length;
     }
 
     public T this[int index]
@@ -144,11 +151,14 @@ internal readonly struct ListElements<T>(List<T> list)
 // Reads the elements of List<T> as a sequence of ReadOnlySpan<T> chunks.
 // Usage: `foreach (var chunk in new ListChunks<T>(list)) { ... }`
 // On netstandard, check ListMarshal.UseChunks first; small lists are cheaper to read through the indexer.
-// Use it only with foreach, which disposes it; a `using` local is read-only and would not advance.
-// .NET 8 or later returns the whole backing array as a single chunk.
+// Use it only with foreach, which disposes it. Do not call MoveNext directly: on a `using` local (which is read-only)
+// it would advance a hidden copy, and on netstandard each copy would rent a buffer that is never returned.
+// .NET 8 or later returns the whole list (or the requested range) as a single span over the backing array.
 // netstandard copies the elements into a pooled buffer with List<T>.CopyTo chunk by chunk,
 // which avoids calling the List<T> indexer for each element.
-// Like a span over the backing array, the number of elements read is fixed when the reader is created.
+// A chunk is valid only until the next MoveNext or Dispose; on netstandard the buffer is returned to ArrayPool on Dispose,
+// so never keep a chunk beyond the loop.
+// The number of elements read never exceeds the count at creation; on netstandard it also stops early if the list shrinks.
 internal ref struct ListChunks<T>
 {
 #if NET8_0_OR_GREATER
@@ -207,6 +217,8 @@ internal ref struct ListChunks<T>
 
     public ListChunks(List<T> list, int start, int count)
     {
+        Debug.Assert(start >= 0 && count >= 0 && start + count <= list.Count);
+
         this.list = list;
         index = start;
         end = start + count;
@@ -253,12 +265,24 @@ internal ref struct ListChunks<T>
 #endif
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly ListChunks<T> GetEnumerator() => this;
+    public readonly ListChunks<T> GetEnumerator()
+    {
+#if !NET8_0_OR_GREATER
+        // foreach enumerates a copy. A copy made after MoveNext would share the rented buffer
+        // and return it to ArrayPool twice.
+        Debug.Assert(buffer == null);
+#endif
+        return this;
+    }
 }
 
-// Fills an empty List<T> with exactly `count` elements through Span<T>.
-// Usage: create, write all elements to Span, call Commit, then Dispose (use `using`).
-// If Commit is not called (e.g. an exception is thrown while filling), the list is left empty on netstandard.
+// Fills an empty List<T> with `count` elements through Span<T>.
+// Usage: create, write the elements to Span, call Commit with the number of elements written, then Dispose (use `using`).
+// Fewer than `count` elements may be written (e.g. when a selector shrinks the source list while it is read).
+// On netstandard, Span is a buffer shared with earlier fills and other ArrayPool users, so Commit clears the unwritten rest
+// to keep their data out of the list; the list then ends with default elements.
+// If Commit is not called (e.g. an exception is thrown while filling), the list is left empty on netstandard,
+// whereas on .NET 8 or later it already has `count` elements, of which the unwritten ones are default.
 internal ref struct ListFiller<T>
 {
 #if NET8_0_OR_GREATER
@@ -278,7 +302,7 @@ internal ref struct ListFiller<T>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly void Commit()
+    public readonly void Commit(int written)
     {
     }
 
@@ -304,9 +328,10 @@ internal ref struct ListFiller<T>
         get => buffer!.Span;
     }
 
-    public readonly void Commit()
+    public readonly void Commit(int written)
     {
-        list.AddRange(buffer!);
+        buffer!.Span.Slice(written).Clear();
+        list.AddRange(buffer);
     }
 
     public void Dispose()
@@ -321,8 +346,7 @@ internal ref struct ListFiller<T>
 #if !NET8_0_OR_GREATER
 
 // Read-only ICollection<T> over a temporary buffer, filled through Span and then passed to List<T>.AddRange.
-// AddRange copies an ICollection<T> through CopyTo in the known implementations, which is a single Array.Copy here.
-// Even if an implementation enumerates it instead, the result is still correct; only the performance differs.
+// The result is correct however AddRange consumes it (CopyTo or enumeration); only the performance differs.
 internal sealed class FillCollection<T> : ICollection<T>
 {
     // Buffers up to this length are kept by the cached instance, so that small fills need no ArrayPool round trip.

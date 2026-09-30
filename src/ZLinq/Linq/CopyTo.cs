@@ -67,8 +67,9 @@ partial class ValueEnumerableExtensions
             }
 #endif
 
-            using var filler = new ListFiller<TSource>(list, count); // expand internal T[] buffer
+            using var filler = new ListFiller<TSource>(list, count);
             var span = filler.Span;
+            var written = count;
             if (!enumerator.TryCopyTo(span, 0))
             {
                 var i = 0;
@@ -77,8 +78,9 @@ partial class ValueEnumerableExtensions
                     span[i] = current;
                     i++;
                 }
+                written = i;
             }
-            filler.Commit();
+            filler.Commit(written);
         }
         else
         {
