@@ -18,6 +18,24 @@ internal static class ListMarshal
     public static ListElements<T> GetElements<T>(List<T> list) => new(list);
 #endif
 
+#if !NET8_0_OR_GREATER
+    // Up to this count, reading through the List<T> indexer is cheaper than renting a buffer for ListChunks<T>.
+    // Measured on Unity 2022.3 and 6000.6 IL2CPP, where the break-even point is between 32 and 64 elements.
+    internal const int ChunkedReadThreshold = 48;
+#endif
+
+    // Whether the operators should read the list with ListChunks<T> rather than GetElements.
+    // Always true on .NET 8 or later, so the JIT removes the other branch.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool UseChunks<T>(List<T> list)
+    {
+#if NET8_0_OR_GREATER
+        return true;
+#else
+        return list.Count > ChunkedReadThreshold;
+#endif
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryGetSpan<T>(List<T> list, out ReadOnlySpan<T> span)
     {
@@ -42,9 +60,21 @@ internal static class ListMarshal
 #else
         if (EnumeratorHelper.TryGetSliceRange(list.Count, offset, destination.Length, out var start, out var count))
         {
-            for (var i = 0; i < count; i++)
+            // First/Last/ElementAt copy a single element, which must not rent a buffer.
+            if (count <= ChunkedReadThreshold)
             {
-                destination[i] = list[start + i];
+                for (var i = 0; i < count; i++)
+                {
+                    destination[i] = list[start + i];
+                }
+                return true;
+            }
+
+            var written = 0;
+            foreach (var chunk in new ListChunks<T>(list, start, count))
+            {
+                chunk.CopyTo(destination.Slice(written));
+                written += chunk.Length;
             }
             return true;
         }
@@ -113,6 +143,7 @@ internal readonly struct ListElements<T>(List<T> list)
 
 // Reads the elements of List<T> as a sequence of ReadOnlySpan<T> chunks.
 // Usage: `foreach (var chunk in new ListChunks<T>(list)) { ... }`
+// On netstandard, check ListMarshal.UseChunks first; small lists are cheaper to read through the indexer.
 // Use it only with foreach, which disposes it; a `using` local is read-only and would not advance.
 // .NET 8 or later returns the whole backing array as a single chunk.
 // netstandard copies the elements into a pooled buffer with List<T>.CopyTo chunk by chunk,
@@ -128,6 +159,11 @@ internal ref struct ListChunks<T>
     public ListChunks(List<T> list)
     {
         span = CollectionsMarshal.AsSpan(list);
+    }
+
+    public ListChunks(List<T> list, int start, int count)
+    {
+        span = CollectionsMarshal.AsSpan(list).Slice(start, count);
     }
 
     public readonly ReadOnlySpan<T> Current
@@ -165,9 +201,15 @@ internal ref struct ListChunks<T>
     int usedLength;
 
     public ListChunks(List<T> list)
+        : this(list, 0, list.Count)
+    {
+    }
+
+    public ListChunks(List<T> list, int start, int count)
     {
         this.list = list;
-        end = list.Count;
+        index = start;
+        end = start + count;
     }
 
     public readonly ReadOnlySpan<T> Current

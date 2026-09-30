@@ -1,10 +1,11 @@
 namespace ZLinq.Tests.Linq;
 
-// The List<T> specialized operators read the list in chunks on netstandard (tested through net48).
-// These tests cover lengths around the chunk size (512) so that every chunk boundary is exercised.
+// The List<T> specialized operators read the list in chunks on netstandard (tested through net48),
+// and through the indexer when the list has 48 elements or fewer.
+// These tests cover lengths around the threshold (48) and the chunk size (512) so that both paths and every chunk boundary are exercised.
 public class ListChunksTest
 {
-    public static TheoryData<int> Lengths => new() { 0, 1, 511, 512, 513, 1024, 1500 };
+    public static TheoryData<int> Lengths => new() { 0, 1, 47, 48, 49, 511, 512, 513, 1024, 1500 };
 
     /// <summary>
     /// Ensures that Count with a predicate on List&lt;T&gt; visits every element exactly once across chunk boundaries.
@@ -43,6 +44,68 @@ public class ListChunksTest
     }
 
     /// <summary>
+    /// Ensures that Where().ToArray() on List&lt;T&gt; keeps the matching elements in order across chunk boundaries.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Lengths))]
+    public void WhereToArray_PreservesOrderAcrossChunks(int length)
+    {
+        var list = Enumerable.Range(0, length).ToList();
+
+        list.AsValueEnumerable().Where(x => x % 3 == 0).ToArray().ShouldBe(list.Where(x => x % 3 == 0).ToArray());
+    }
+
+    /// <summary>
+    /// Ensures that Where().Select().ToArray() on List&lt;T&gt; keeps the projected elements in order across chunk boundaries.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Lengths))]
+    public void WhereSelectToArray_PreservesOrderAcrossChunks(int length)
+    {
+        var list = Enumerable.Range(0, length).ToList();
+
+        list.AsValueEnumerable().Where(x => x % 3 == 0).Select(x => x * 2).ToArray()
+            .ShouldBe(list.Where(x => x % 3 == 0).Select(x => x * 2).ToArray());
+    }
+
+    /// <summary>
+    /// Ensures that copying a range of List&lt;T&gt; (TryCopyTo) copies the right elements to the right positions,
+    /// both for List&lt;T&gt; itself and for List&lt;T&gt; seen as IEnumerable&lt;T&gt;.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Lengths))]
+    public void CopyRange_CopiesTheRightElements(int length)
+    {
+        var list = Enumerable.Range(0, length).ToList();
+        IEnumerable<int> enumerable = list;
+
+        var skip = length / 3;
+        var take = length - skip - 1;
+
+        list.AsValueEnumerable().Skip(skip).Take(take).ToArray().ShouldBe(list.Skip(skip).Take(take).ToArray());
+        enumerable.AsValueEnumerable().Skip(skip).Take(take).ToArray().ShouldBe(enumerable.Skip(skip).Take(take).ToArray());
+    }
+
+    /// <summary>
+    /// Ensures that the single element reads (First, Last, ElementAt), which copy one element, return the right element.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Lengths))]
+    public void SingleElementReads_ReturnTheRightElement(int length)
+    {
+        var list = Enumerable.Range(0, length).ToList();
+        if (length == 0)
+        {
+            list.AsValueEnumerable().FirstOrDefault(-1).ShouldBe(-1);
+            return;
+        }
+
+        list.AsValueEnumerable().First().ShouldBe(list.First());
+        list.AsValueEnumerable().Last().ShouldBe(list.Last());
+        list.AsValueEnumerable().ElementAt(length / 2).ShouldBe(list.ElementAt(length / 2));
+    }
+
+    /// <summary>
     /// Ensures that the chunked read also works for reference type elements, including null.
     /// </summary>
     [Theory]
@@ -54,6 +117,8 @@ public class ListChunksTest
         list.AsValueEnumerable().Count(x => x == null).ShouldBe(list.Count(x => x == null));
         list.AsValueEnumerable().Where(x => x != null).Count().ShouldBe(list.Where(x => x != null).Count());
         list.AsValueEnumerable().Select(x => x?.Length ?? -1).ToList().ShouldBe(list.Select(x => x?.Length ?? -1).ToList());
+        list.AsValueEnumerable().Where(x => x != null).ToArray().ShouldBe(list.Where(x => x != null).ToArray());
+        list.AsValueEnumerable().Skip(1).ToArray().ShouldBe(list.Skip(1).ToArray());
     }
 
     /// <summary>

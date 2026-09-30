@@ -88,11 +88,25 @@ namespace ZLinq
             var predicate = source.Enumerator.Predicate;
 
             var count = 0;
-            foreach (var span in new ListChunks<TSource>(list))
+            if (ListMarshal.UseChunks(list))
             {
-                for (int i = 0; (uint)i < (uint)span.Length; i++)
+                foreach (var span in new ListChunks<TSource>(list))
                 {
-                    if (predicate(span[i]))
+                    for (int i = 0; (uint)i < (uint)span.Length; i++)
+                    {
+                        if (predicate(span[i]))
+                        {
+                            count++;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var elements = ListMarshal.GetElements(list);
+                for (int i = 0; (uint)i < (uint)elements.Length; i++)
+                {
+                    if (predicate(elements[i]))
                     {
                         count++;
                     }
@@ -185,11 +199,25 @@ namespace ZLinq
             var list = source.Enumerator.GetSource();
             var count = 0;
 
-            foreach (var span in new ListChunks<TSource>(list))
+            if (ListMarshal.UseChunks(list))
             {
-                for (int i = 0; (uint)i < (uint)span.Length; i++)
+                foreach (var span in new ListChunks<TSource>(list))
                 {
-                    if (predicate(span[i]))
+                    for (int i = 0; (uint)i < (uint)span.Length; i++)
+                    {
+                        if (predicate(span[i]))
+                        {
+                            count++;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var elements = ListMarshal.GetElements(list);
+                for (int i = 0; (uint)i < (uint)elements.Length; i++)
+                {
+                    if (predicate(elements[i]))
                     {
                         count++;
                     }

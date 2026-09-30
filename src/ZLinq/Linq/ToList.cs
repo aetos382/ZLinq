@@ -191,15 +191,26 @@
             using var filler = new ListFiller<TResult>(list, count);
             var span = filler.Span;
 
-            var offset = 0;
-            foreach (var chunk in new ListChunks<TSource>(sourceList))
+            if (ListMarshal.UseChunks(sourceList))
             {
-                var destination = span.Slice(offset, chunk.Length);
-                for (int i = 0; (uint)i < (uint)chunk.Length; i++)
+                var offset = 0;
+                foreach (var chunk in new ListChunks<TSource>(sourceList))
                 {
-                    destination[i] = selector(chunk[i]);
+                    var destination = span.Slice(offset, chunk.Length);
+                    for (int i = 0; (uint)i < (uint)chunk.Length; i++)
+                    {
+                        destination[i] = selector(chunk[i]);
+                    }
+                    offset += chunk.Length;
                 }
-                offset += chunk.Length;
+            }
+            else
+            {
+                var elements = ListMarshal.GetElements(sourceList);
+                for (int i = 0; (uint)i < (uint)elements.Length; i++)
+                {
+                    span[i] = selector(elements[i]);
+                }
             }
 
             filler.Commit();
