@@ -87,13 +87,15 @@ namespace ZLinq
             var list = source.Enumerator.GetSource();
             var predicate = source.Enumerator.Predicate;
 
-            var span = ListMarshal.GetElements(list);
             var count = 0;
-            for (int i = 0; (uint)i < (uint)span.Length; i++)
+            foreach (var span in new ListChunks<TSource>(list))
             {
-                if (predicate(span[i]))
+                for (int i = 0; (uint)i < (uint)span.Length; i++)
                 {
-                    count++;
+                    if (predicate(span[i]))
+                    {
+                        count++;
+                    }
                 }
             }
             return count;
@@ -183,12 +185,14 @@ namespace ZLinq
             var list = source.Enumerator.GetSource();
             var count = 0;
 
-            var span = ListMarshal.GetElements(list);
-            for (int i = 0; (uint)i < (uint)span.Length; i++)
+            foreach (var span in new ListChunks<TSource>(list))
             {
-                if (predicate(span[i]))
+                for (int i = 0; (uint)i < (uint)span.Length; i++)
                 {
-                    count++;
+                    if (predicate(span[i]))
+                    {
+                        count++;
+                    }
                 }
             }
 

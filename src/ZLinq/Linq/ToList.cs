@@ -182,16 +182,24 @@
 
         public static List<TResult> ToList<TSource, TResult>(this ValueEnumerable<ListSelect<TSource, TResult>, TResult> source)
         {
-            var sourceArray = ListMarshal.GetElements(source.Enumerator.source);
+            var sourceList = source.Enumerator.source;
             var selector = source.Enumerator.selector;
 
-            var list = new List<TResult>(sourceArray.Length);
-            using var filler = new ListFiller<TResult>(list, sourceArray.Length);
+            var count = sourceList.Count;
+
+            var list = new List<TResult>(count);
+            using var filler = new ListFiller<TResult>(list, count);
             var span = filler.Span;
 
-            for (int i = 0; (uint)i < (uint)sourceArray.Length; i++)
+            var offset = 0;
+            foreach (var chunk in new ListChunks<TSource>(sourceList))
             {
-                span[i] = selector(sourceArray[i]);
+                var destination = span.Slice(offset, chunk.Length);
+                for (int i = 0; (uint)i < (uint)chunk.Length; i++)
+                {
+                    destination[i] = selector(chunk[i]);
+                }
+                offset += chunk.Length;
             }
 
             filler.Commit();

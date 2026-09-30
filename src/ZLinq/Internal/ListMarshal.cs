@@ -111,6 +111,109 @@ internal readonly struct ListElements<T>(List<T> list)
 
 #endif
 
+// Reads the elements of List<T> as a sequence of ReadOnlySpan<T> chunks.
+// Usage: `foreach (var chunk in new ListChunks<T>(list)) { ... }`
+// Use it only with foreach, which disposes it; a `using` local is read-only and would not advance.
+// .NET 8 or later returns the whole backing array as a single chunk.
+// netstandard copies the elements into a pooled buffer with List<T>.CopyTo chunk by chunk,
+// which avoids calling the List<T> indexer for each element.
+// Like a span over the backing array, the number of elements read is fixed when the reader is created.
+internal ref struct ListChunks<T>
+{
+#if NET8_0_OR_GREATER
+
+    readonly ReadOnlySpan<T> span;
+    bool consumed;
+
+    public ListChunks(List<T> list)
+    {
+        span = CollectionsMarshal.AsSpan(list);
+    }
+
+    public readonly ReadOnlySpan<T> Current
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => span;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool MoveNext()
+    {
+        if (consumed)
+        {
+            return false;
+        }
+
+        consumed = true;
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly void Dispose()
+    {
+    }
+
+#else
+
+    const int ChunkSize = 512;
+
+    readonly List<T> list;
+    readonly int end;
+    int index;
+    T[]? buffer;
+    int length;
+    int usedLength;
+
+    public ListChunks(List<T> list)
+    {
+        this.list = list;
+        end = list.Count;
+    }
+
+    public readonly ReadOnlySpan<T> Current
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => new(buffer, 0, length);
+    }
+
+    public bool MoveNext()
+    {
+        // The list may shrink while it is being read (e.g. by a predicate); never read beyond its current count.
+        var remaining = Math.Min(end, list.Count) - index;
+        if (remaining <= 0)
+        {
+            return false;
+        }
+
+        buffer ??= ArrayPool<T>.Shared.Rent(Math.Min(remaining, ChunkSize));
+
+        length = Math.Min(remaining, buffer.Length);
+        list.CopyTo(index, buffer, 0, length);
+        index += length;
+        usedLength = Math.Max(usedLength, length);
+        return true;
+    }
+
+    public void Dispose()
+    {
+        if (buffer != null)
+        {
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            {
+                Array.Clear(buffer, 0, usedLength);
+            }
+
+            ArrayPool<T>.Shared.Return(buffer);
+            buffer = null;
+        }
+    }
+
+#endif
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ListChunks<T> GetEnumerator() => this;
+}
+
 // Fills an empty List<T> with exactly `count` elements through Span<T>.
 // Usage: create, write all elements to Span, call Commit, then Dispose (use `using`).
 // If Commit is not called (e.g. an exception is thrown while filling), the list is left empty on netstandard.
