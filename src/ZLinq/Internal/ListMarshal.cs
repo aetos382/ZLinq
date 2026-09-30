@@ -276,21 +276,31 @@ internal ref struct ListChunks<T>
     }
 }
 
-// Fills an empty List<T> with `count` elements through Span<T>.
+// Fills a List<T> with `count` elements through Span<T>: either a new list, or an existing empty list.
 // Usage: create, write the elements to Span, call Commit with the number of elements written, then Dispose (use `using`).
+// Commit returns the filled list.
 // Fewer than `count` elements may be written (e.g. when a selector shrinks the source list while it is read).
 // On netstandard, Span is a buffer shared with earlier fills and other ArrayPool users, so Commit clears the unwritten rest
 // to keep their data out of the list; the list then ends with default elements.
-// If Commit is not called (e.g. an exception is thrown while filling), the list is left empty on netstandard,
+// On netstandard, a new list is created from the buffer with List<T>(IEnumerable<T>), which copies it directly into the new list.
+// An existing list is filled with AddRange, which on .NET Framework (and likely Mono) copies it through a temporary array.
+// If Commit is not called (e.g. an exception is thrown while filling), an existing list is left empty on netstandard,
 // whereas on .NET 8 or later it already has `count` elements, of which the unwritten ones are default.
 internal ref struct ListFiller<T>
 {
 #if NET8_0_OR_GREATER
 
+    readonly List<T> list;
     readonly Span<T> span;
+
+    public ListFiller(int count)
+        : this(new List<T>(count), count)
+    {
+    }
 
     public ListFiller(List<T> list, int count)
     {
+        this.list = list;
         CollectionsMarshal.SetCount(list, count);
         span = CollectionsMarshal.AsSpan(list);
     }
@@ -302,8 +312,9 @@ internal ref struct ListFiller<T>
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly void Commit(int written)
+    public readonly List<T> Commit(int written)
     {
+        return list;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -313,8 +324,14 @@ internal ref struct ListFiller<T>
 
 #else
 
-    readonly List<T> list;
+    readonly List<T>? list;
     FillCollection<T>? buffer;
+
+    public ListFiller(int count)
+    {
+        list = null;
+        buffer = FillCollection<T>.Rent(count);
+    }
 
     public ListFiller(List<T> list, int count)
     {
@@ -328,10 +345,17 @@ internal ref struct ListFiller<T>
         get => buffer!.Span;
     }
 
-    public readonly void Commit(int written)
+    public readonly List<T> Commit(int written)
     {
         buffer!.Span.Slice(written).Clear();
+
+        if (list == null)
+        {
+            return new List<T>(buffer);
+        }
+
         list.AddRange(buffer);
+        return list;
     }
 
     public void Dispose()
@@ -345,8 +369,8 @@ internal ref struct ListFiller<T>
 
 #if !NET8_0_OR_GREATER
 
-// Read-only ICollection<T> over a temporary buffer, filled through Span and then passed to List<T>.AddRange.
-// The result is correct however AddRange consumes it (CopyTo or enumeration); only the performance differs.
+// Read-only ICollection<T> over a temporary buffer, filled through Span and then passed to List<T>(IEnumerable<T>) or List<T>.AddRange.
+// The result is correct however they consume it (CopyTo or enumeration); only the performance differs.
 internal sealed class FillCollection<T> : ICollection<T>
 {
     // Buffers up to this length are kept by the cached instance, so that small fills need no ArrayPool round trip.

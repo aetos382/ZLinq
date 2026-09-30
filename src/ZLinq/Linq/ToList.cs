@@ -24,8 +24,7 @@
                 }
 #endif
 
-                var list = new List<TSource>(count);
-                using var filler = new ListFiller<TSource>(list, count);
+                using var filler = new ListFiller<TSource>(count);
                 var span = filler.Span;
                 var written = count;
                 if (!enumerator.TryCopyTo(span, 0))
@@ -38,8 +37,7 @@
                     }
                     written = i;
                 }
-                filler.Commit(written);
-                return list;
+                return filler.Commit(written);
             }
             else
             {
@@ -72,11 +70,9 @@
 
                 count = arrayBuilder.Count;
 
-                var list = new List<TSource>(count);
-                using var filler = new ListFiller<TSource>(list, count);
+                using var filler = new ListFiller<TSource>(count);
                 arrayBuilder.CopyToAndClear(filler.Span);
-                filler.Commit(count);
-                return list;
+                return filler.Commit(count);
             }
         }
 
@@ -94,8 +90,7 @@
 
             if (enumerator.TryGetSpan(out var sourceSpan))
             {
-                var list = new List<TResult>(sourceSpan.Length);
-                using var filler = new ListFiller<TResult>(list, sourceSpan.Length);
+                using var filler = new ListFiller<TResult>(sourceSpan.Length);
                 var span = filler.Span;
 
                 for (int i = 0; (uint)i < (uint)sourceSpan.Length; i++)
@@ -103,8 +98,7 @@
                     span[i] = selector(sourceSpan[i]);
                 }
 
-                filler.Commit(sourceSpan.Length);
-                return list;
+                return filler.Commit(sourceSpan.Length);
             }
             else
             {
@@ -136,11 +130,9 @@
 
                 var count = arrayBuilder.Count;
 
-                var list = new List<TResult>(count);
-                using var filler = new ListFiller<TResult>(list, count);
+                using var filler = new ListFiller<TResult>(count);
                 arrayBuilder.CopyToAndClear(filler.Span);
-                filler.Commit(count);
-                return list;
+                return filler.Commit(count);
             }
         }
 
@@ -150,8 +142,7 @@
             var count = source.Enumerator.count;
             var selector = source.Enumerator.selector;
 
-            var list = new List<TResult>(count);
-            using var filler = new ListFiller<TResult>(list, count);
+            using var filler = new ListFiller<TResult>(count);
             var span = filler.Span;
 
             for (int i = 0; (uint)i < (uint)span.Length; i++)
@@ -160,8 +151,7 @@
                 value++;
             }
 
-            filler.Commit(count);
-            return list;
+            return filler.Commit(count);
         }
 
         public static List<TResult> ToList<TSource, TResult>(this ValueEnumerable<ArraySelect<TSource, TResult>, TResult> source)
@@ -169,8 +159,7 @@
             var sourceArray = source.Enumerator.source;
             var selector = source.Enumerator.selector;
 
-            var list = new List<TResult>(sourceArray.Length);
-            using var filler = new ListFiller<TResult>(list, sourceArray.Length);
+            using var filler = new ListFiller<TResult>(sourceArray.Length);
             var span = filler.Span;
 
             for (int i = 0; (uint)i < (uint)sourceArray.Length; i++)
@@ -178,8 +167,7 @@
                 span[i] = selector(sourceArray[i]);
             }
 
-            filler.Commit(sourceArray.Length);
-            return list;
+            return filler.Commit(sourceArray.Length);
         }
 
         public static List<TResult> ToList<TSource, TResult>(this ValueEnumerable<ListSelect<TSource, TResult>, TResult> source)
@@ -189,8 +177,7 @@
 
             var count = sourceList.Count;
 
-            var list = new List<TResult>(count);
-            using var filler = new ListFiller<TResult>(list, count);
+            using var filler = new ListFiller<TResult>(count);
             var span = filler.Span;
 
             var written = 0;
@@ -217,8 +204,7 @@
                 written = elements.Length;
             }
 
-            filler.Commit(written);
-            return list;
+            return filler.Commit(written);
         }
     }
 }
