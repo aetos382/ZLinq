@@ -140,6 +140,31 @@ partial class ValueEnumerableExtensions
         }
     }
 
+#if !NET8_0_OR_GREATER
+
+    // netstandard cannot get the backing array of List<string>, so copy the elements into a pooled array
+    // to use the fast path for strings, which computes the final length before writing.
+    static string JoinToString(List<string> source, ReadOnlySpan<char> separator)
+    {
+        var count = source.Count;
+        if (count == 0) return "";
+        if (count == 1) return source[0];
+
+        var buffer = System.Buffers.ArrayPool<string>.Shared.Rent(count);
+        try
+        {
+            source.CopyTo(0, buffer, 0, count);
+            return JoinToString(new ReadOnlySpan<string>(buffer, 0, count), separator);
+        }
+        finally
+        {
+            Array.Clear(buffer, 0, count);
+            System.Buffers.ArrayPool<string>.Shared.Return(buffer);
+        }
+    }
+
+#endif
+
     static string JoinToString(ReadOnlySpan<string> source, ReadOnlySpan<char> separator)
     {
         if (source.Length == 0) return "";
@@ -279,12 +304,14 @@ partial class ValueEnumerableExtensions
     {
         var list = source.Enumerator.GetSource();
 
-#if NET8_0_OR_GREATER
         if (typeof(TSource) == typeof(string))
         {
+#if NET8_0_OR_GREATER
             return JoinToString(CollectionsMarshal.AsSpan(Unsafe.As<List<TSource>, List<string>>(ref list)), separator);
-        }
+#else
+            return JoinToString(Unsafe.As<List<TSource>, List<string>>(ref list), separator);
 #endif
+        }
 
         var span = ListMarshal.GetElements(list);
 
