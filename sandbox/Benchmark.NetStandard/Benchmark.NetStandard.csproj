@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- CS8002: Referenced assembly does not have a strong name.-->
+    <NoWarn>$(NoWarn);CS8002</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
+  <!--
+    Both jobs must run the netstandard2.1 build of ZLinq, because the code under measurement
+    (the List<T> access for netstandard) is compiled only for netstandard.
+    Without the settings below, net8.0 consumers would pick the net8.0 build.
+  -->
+  <Choose>
+    <!-- Baseline job: a netstandard2.1 ZLinq.dll saved from a build of the baseline source. -->
+    <When Condition="'$(Configuration)' == 'ZLinqBaseline'">
+      <PropertyGroup>
+        <!-- Custom configurations are not optimized by default. -->
+        <Optimize>true</Optimize>
+      </PropertyGroup>
+      <ItemGroup>
+        <Reference Include="ZLinq" HintPath="$(ZLinqBaselineDll)" />
+      </ItemGroup>
+    </When>
+    <!-- Current job: the netstandard2.1 build of the current source. -->
+    <Otherwise>
+      <ItemGroup>
+        <!-- PrivateAssets prevents the BenchmarkDotNet-generated project from resolving ZLinq transitively as net8.0. -->
+        <ProjectReference Include="..\..\src\ZLinq\ZLinq.csproj" SetTargetFramework="TargetFramework=netstandard2.1" PrivateAssets="all" />
+      </ItemGroup>
+    </Otherwise>
+  </Choose>
+
+  <Target Name="ValidateZLinqBaselineDll" BeforeTargets="ResolveAssemblyReferences" Condition="'$(Configuration)' == 'ZLinqBaseline'">
+    <Error Condition="'$(ZLinqBaselineDll)' == '' Or !Exists('$(ZLinqBaselineDll)')" Text="ZLinqBaselineDll must point to an existing netstandard2.1 ZLinq.dll: '$(ZLinqBaselineDll)'" />
+  </Target>
+
+</Project>
