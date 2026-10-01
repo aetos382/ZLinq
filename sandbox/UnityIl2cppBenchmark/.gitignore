@@ -1,0 +1,11 @@
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.csproj
+*.sln
+*.slnx
+
+# Copied in by scripts/build-variant.sh
+*/Assets/Plugins/**/*.dll
