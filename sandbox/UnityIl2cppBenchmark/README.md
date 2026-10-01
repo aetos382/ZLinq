@@ -53,4 +53,4 @@ The numbers in the pull request for #260 (netstandard builds no longer rely on t
 
 - `Baseline`: `main` at `ce6fcff`, which reaches the backing array of `List<T>` through its private field layout.
 - `Naive`: `f95e7ac` (tag `bench/naive-list-access`), which uses only the public `List<T>` API and reads the elements one by one through the indexer, without chunked reads or bulk copies.
-- `Current`: `e4dfa30`, the head of the pull request.
+- `Final`: `aac6d87`, the head of the pull request.
