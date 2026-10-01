@@ -89,14 +89,15 @@ internal static class ListMarshal
     // netstandard can neither read the elements of List<T> into Span<T> nor write Span<T> into List<T> in bulk,
     // so ToArray detects List<T> sources, and ToList/CopyTo detect List<T> and array sources,
     // and they use the bulk copies of the public API instead (List<T>.ToArray, List<T>(IEnumerable<T>), List<T>.AddRange).
-    // TEnumerator is a value type, so the compiler (JIT or IL2CPP) evaluates the typeof comparison as a constant
-    // and removes the unused branch.
+    // The source kind is read from SourceKind<TEnumerator, T> rather than by comparing typeof directly:
+    // the JIT and the IL2CPP of Unity 6 evaluate such a comparison as a constant, but the IL2CPP of Unity 2022.3
+    // compares the Type objects at run time on every call, which costs about as much as copying dozens of elements.
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryGetListSource<TEnumerator, T>(in TEnumerator enumerator, [NotNullWhen(true)] out List<T>? list)
         where TEnumerator : struct, IValueEnumerator<T>
     {
-        if (typeof(TEnumerator) == typeof(FromList<T>))
+        if (SourceKind<TEnumerator, T>.IsFromList)
         {
             list = Unsafe.As<TEnumerator, FromList<T>>(ref Unsafe.AsRef(in enumerator)).GetSource();
             return true;
@@ -110,7 +111,7 @@ internal static class ListMarshal
     public static bool TryGetArraySource<TEnumerator, T>(in TEnumerator enumerator, [NotNullWhen(true)] out T[]? array)
         where TEnumerator : struct, IValueEnumerator<T>
     {
-        if (typeof(TEnumerator) == typeof(FromArray<T>))
+        if (SourceKind<TEnumerator, T>.IsFromArray)
         {
             array = Unsafe.As<TEnumerator, FromArray<T>>(ref Unsafe.AsRef(in enumerator)).GetSource();
             return true;
@@ -118,6 +119,12 @@ internal static class ListMarshal
 
         array = null;
         return false;
+    }
+
+    static class SourceKind<TEnumerator, T>
+    {
+        public static readonly bool IsFromList = typeof(TEnumerator) == typeof(FromList<T>);
+        public static readonly bool IsFromArray = typeof(TEnumerator) == typeof(FromArray<T>);
     }
 
 #endif
