@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -13,19 +13,19 @@ internal static class ListMarshal
 {
 #if NET8_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ReadOnlySpan<T> GetElements<T>(List<T> list) => CollectionsMarshal.AsSpan(list);
+    public static ReadOnlySpan<T> AsSpan<T>(List<T> list) => CollectionsMarshal.AsSpan(list);
 #else
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ListElements<T> GetElements<T>(List<T> list) => new(list);
+    public static ListSpan<T> AsSpan<T>(List<T> list) => new(list);
 #endif
 
 #if !NET8_0_OR_GREATER
     // Up to this count, reading through the List<T> indexer is cheaper than renting a buffer for ListChunks<T>.
     // Measured on Unity 2022.3 and 6000.6 IL2CPP, where the break-even point is between 32 and 64 elements.
-    internal const int ChunkedReadThreshold = 48;
+    private const int ChunkedReadThreshold = 48;
 #endif
 
-    // Whether the operators should read the list with ListChunks<T> rather than GetElements.
+    // Whether the operators should read the list with ListChunks<T> rather than AsSpan.
     // Always true on .NET 8 or later, so the JIT removes the other branch.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool UseChunks<T>(List<T> list)
@@ -129,7 +129,7 @@ internal static class ListMarshal
 // so the operators can be written once for both ReadOnlySpan<T> (.NET 8 or later) and this type (netstandard).
 // Like a span over the backing array, Length is fixed when this is created, so a loop bounded by Length terminates
 // even if the loop body adds elements to the list. If the list shrinks, the indexer throws instead of reading stale elements.
-internal readonly struct ListElements<T>(List<T> list)
+internal readonly struct ListSpan<T>(List<T> list)
 {
     readonly int length = list.Count;
 

@@ -196,7 +196,7 @@
             }
             else
             {
-                var elements = ListMarshal.GetElements(sourceList);
+                var elements = ListMarshal.AsSpan(sourceList);
                 for (int i = 0; (uint)i < (uint)elements.Length; i++)
                 {
                     span[i] = selector(elements[i]);

@@ -313,38 +313,38 @@ partial class ValueEnumerableExtensions
 #endif
         }
 
-        var elements = ListMarshal.GetElements(list);
+        var span = ListMarshal.AsSpan(list);
 
-        if (elements.Length == 0) return "";
-        if (elements.Length == 1) return elements[0]!.ToString() ?? "";
+        if (span.Length == 0) return "";
+        if (span.Length == 1) return span[0]!.ToString() ?? "";
 
         var result = new ValueStringBuilder(stackalloc char[StackallocCharBufferSizeLimit]);
 
         if (separator.Length == 0)
         {
-            for (int i = 0; (uint)i < (uint)elements.Length; i++)
+            for (int i = 0; (uint)i < (uint)span.Length; i++)
             {
-                result.Append(elements[i]);
+                result.Append(span[i]);
             }
         }
         else if (separator.Length == 1)
         {
             var separatorChar = separator[0];
 
-            result.Append(elements[0]);
-            for (int i = 1; (uint)i < (uint)elements.Length; i++)
+            result.Append(span[0]);
+            for (int i = 1; (uint)i < (uint)span.Length; i++)
             {
                 result.Append(separatorChar);
-                result.Append(elements[i]);
+                result.Append(span[i]);
             }
         }
         else
         {
-            result.Append(elements[0]);
-            for (int i = 1; (uint)i < (uint)elements.Length; i++)
+            result.Append(span[0]);
+            for (int i = 1; (uint)i < (uint)span.Length; i++)
             {
                 result.Append(separator);
-                result.Append(elements[i]);
+                result.Append(span[i]);
             }
         }
 
@@ -577,37 +577,37 @@ partial class ValueEnumerableExtensions
         var list = source.Enumerator.source;
         var selector = source.Enumerator.selector;
 
-        var elements = ListMarshal.GetElements(list);
+        var span = ListMarshal.AsSpan(list);
 
-        if (elements.Length == 0) return "";
-        if (elements.Length == 1) return selector(elements[0])?.ToString() ?? "";
+        if (span.Length == 0) return "";
+        if (span.Length == 1) return selector(span[0])?.ToString() ?? "";
 
         var result = new ValueStringBuilder(stackalloc char[StackallocCharBufferSizeLimit]);
-        result.Append(selector(elements[0]));
+        result.Append(selector(span[0]));
         var i = 1;
 
         if (separator.Length == 0)
         {
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
-                result.Append(selector(elements[i]));
+                result.Append(selector(span[i]));
             }
         }
         else if (separator.Length == 1)
         {
             var charSeparator = separator[0];
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
                 result.Append(charSeparator);
-                result.Append(selector(elements[i]));
+                result.Append(selector(span[i]));
             }
         }
         else
         {
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
                 result.Append(separator);
-                result.Append(selector(elements[i]));
+                result.Append(selector(span[i]));
             }
         }
 
@@ -634,17 +634,17 @@ partial class ValueEnumerableExtensions
         var list = source.Enumerator.GetSource();
         var predicate = source.Enumerator.Predicate;
 
-        var elements = ListMarshal.GetElements(list);
+        var span = ListMarshal.AsSpan(list);
 
-        if (elements.Length == 0) return "";
+        if (span.Length == 0) return "";
 
         var result = new ValueStringBuilder(stackalloc char[StackallocCharBufferSizeLimit]);
         var i = 0;
-        for (; (uint)i < (uint)elements.Length; i++)
+        for (; (uint)i < (uint)span.Length; i++)
         {
-            if (predicate(elements[i]))
+            if (predicate(span[i]))
             {
-                result.Append(elements[i]);
+                result.Append(span[i]);
                 i++;
                 break;
             }
@@ -652,34 +652,34 @@ partial class ValueEnumerableExtensions
 
         if (separator.Length == 0)
         {
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
-                if (predicate(elements[i]))
+                if (predicate(span[i]))
                 {
-                    result.Append(elements[i]);
+                    result.Append(span[i]);
                 }
             }
         }
         else if (separator.Length == 1)
         {
             var charSeparator = separator[0];
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
-                if (predicate(elements[i]))
+                if (predicate(span[i]))
                 {
                     result.Append(charSeparator);
-                    result.Append(elements[i]);
+                    result.Append(span[i]);
                 }
             }
         }
         else
         {
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
-                if (predicate(elements[i]))
+                if (predicate(span[i]))
                 {
                     result.Append(separator);
-                    result.Append(elements[i]);
+                    result.Append(span[i]);
                 }
             }
         }
@@ -708,17 +708,17 @@ partial class ValueEnumerableExtensions
         var predicate = source.Enumerator.Predicate;
         var selector = source.Enumerator.Selector;
 
-        var elements = ListMarshal.GetElements(list);
+        var span = ListMarshal.AsSpan(list);
 
-        if (elements.Length == 0) return "";
+        if (span.Length == 0) return "";
 
         var result = new ValueStringBuilder(stackalloc char[StackallocCharBufferSizeLimit]);
         var i = 0;
-        for (; (uint)i < (uint)elements.Length; i++)
+        for (; (uint)i < (uint)span.Length; i++)
         {
-            if (predicate(elements[i]))
+            if (predicate(span[i]))
             {
-                result.Append(selector(elements[i]));
+                result.Append(selector(span[i]));
                 i++;
                 break;
             }
@@ -726,34 +726,34 @@ partial class ValueEnumerableExtensions
 
         if (separator.Length == 0)
         {
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
-                if (predicate(elements[i]))
+                if (predicate(span[i]))
                 {
-                    result.Append(selector(elements[i]));
+                    result.Append(selector(span[i]));
                 }
             }
         }
         else if (separator.Length == 1)
         {
             var charSeparator = separator[0];
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
-                if (predicate(elements[i]))
+                if (predicate(span[i]))
                 {
                     result.Append(charSeparator);
-                    result.Append(selector(elements[i]));
+                    result.Append(selector(span[i]));
                 }
             }
         }
         else
         {
-            for (; (uint)i < (uint)elements.Length; i++)
+            for (; (uint)i < (uint)span.Length; i++)
             {
-                if (predicate(elements[i]))
+                if (predicate(span[i]))
                 {
                     result.Append(separator);
-                    result.Append(selector(elements[i]));
+                    result.Append(selector(span[i]));
                 }
             }
         }

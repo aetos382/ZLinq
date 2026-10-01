@@ -103,10 +103,10 @@ namespace ZLinq
             }
             else
             {
-                var elements = ListMarshal.GetElements(list);
-                for (int i = 0; (uint)i < (uint)elements.Length; i++)
+                var span = ListMarshal.AsSpan(list);
+                for (int i = 0; (uint)i < (uint)span.Length; i++)
                 {
-                    if (predicate(elements[i]))
+                    if (predicate(span[i]))
                     {
                         count++;
                     }
@@ -214,10 +214,10 @@ namespace ZLinq
             }
             else
             {
-                var elements = ListMarshal.GetElements(list);
-                for (int i = 0; (uint)i < (uint)elements.Length; i++)
+                var span = ListMarshal.AsSpan(list);
+                for (int i = 0; (uint)i < (uint)span.Length; i++)
                 {
-                    if (predicate(elements[i]))
+                    if (predicate(span[i]))
                     {
                         count++;
                     }

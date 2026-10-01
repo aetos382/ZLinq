@@ -522,10 +522,10 @@ namespace ZLinq.Linq
 
         public bool TryGetNext(out TResult current)
         {
-            var elements = ListMarshal.GetElements(source);
-            while ((uint)index < (uint)elements.Length)
+            var span = ListMarshal.AsSpan(source);
+            while ((uint)index < (uint)span.Length)
             {
-                current = selector(elements[index++]);
+                current = selector(span[index++]);
                 if (predicate(current))
                 {
                     return true;

@@ -474,7 +474,7 @@ partial class ValueEnumerableExtensions
         }
         else
         {
-            var elements = ListMarshal.GetElements(sourceList);
+            var elements = ListMarshal.AsSpan(sourceList);
             for (var j = 0; (uint)j < (uint)elements.Length; j++)
             {
                 var item = elements[j];
@@ -549,7 +549,7 @@ partial class ValueEnumerableExtensions
         }
         else
         {
-            var elements = ListMarshal.GetElements(sourceList);
+            var elements = ListMarshal.AsSpan(sourceList);
             for (var j = 0; (uint)j < (uint)elements.Length; j++)
             {
                 var item = elements[j];
