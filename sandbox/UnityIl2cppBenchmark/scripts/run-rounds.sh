@@ -12,12 +12,14 @@ logs="$result.logs"
 mkdir -p "$logs"
 rm -f "$result"
 result_w=$(cygpath -w "$(cd "$(dirname "$result")" && pwd)/$(basename "$result")")
-logs_w=$(cygpath -w "$(cd "$logs" && pwd)")
+logs=$(cd "$logs" && pwd)
 
 for r in $(seq 1 "$rounds"); do
   for v in "$@"; do
     echo "$(date +%T) round $r $v"
-    (cd "$builds/$v" && ./Bench.exe -batchmode -nographics -samples "$samples" -output "$result_w" -logFile "$logs_w\$v-$r.log")
+    log_w=$(cygpath -w "$logs/$v-$r.log")
+    # The player also writes its startup messages to stdout; the log file has them.
+    (cd "$builds/$v" && ./Bench.exe -batchmode -nographics -samples "$samples" -output "$result_w" -logFile "$log_w" > /dev/null)
   done
 done
 echo "$(date +%T) done"
