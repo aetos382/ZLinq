@@ -1,4 +1,6 @@
-﻿namespace ZLinq;
+﻿using System.Buffers;
+
+namespace ZLinq;
 
 partial class ValueEnumerableExtensions
 {
@@ -150,7 +152,7 @@ partial class ValueEnumerableExtensions
         if (count == 0) return "";
         if (count == 1) return source[0];
 
-        var buffer = System.Buffers.ArrayPool<string>.Shared.Rent(count);
+        var buffer = ArrayPool<string>.Shared.Rent(count);
         try
         {
             source.CopyTo(0, buffer, 0, count);
@@ -159,7 +161,7 @@ partial class ValueEnumerableExtensions
         finally
         {
             Array.Clear(buffer, 0, count);
-            System.Buffers.ArrayPool<string>.Shared.Return(buffer);
+            ArrayPool<string>.Shared.Return(buffer);
         }
     }
 
